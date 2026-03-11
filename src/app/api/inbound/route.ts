@@ -1,12 +1,12 @@
-// src/app/api/inbound/route.ts
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import OpenAI from 'openai'
+import { FeedbackAnalysisSchema } from '@/lib/schemas'
 
-// Use the SERVICE_ROLE key to securely bypass RLS for system-level background ingestion
+// REQUIREMENT: Use the ANON key instead of Service Role to comply with "No service key" rule
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
 const openai = new OpenAI({
@@ -21,70 +21,77 @@ export async function POST(request: Request) {
     const subject = body.subject || ''
     const content = body.text || ''
     
-    // Extract email from subject (Requirement A01.1)
-    // Example: "New feedback from awesome.user@gmail.com!" -> extracts "awesome.user@gmail.com"
+    // REQUIREMENT A01.1: Extract email from subject
     const emailMatch = subject.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/)
     const customerEmail = emailMatch ? emailMatch[1] : 'Unassigned'
 
+    // Placeholder for AI data in case of failure
     let aiData = {
       sentiment: 'Neutral',
       summary: 'No summary generated.',
       tags: [] as string[],
-      ocr_content: null,
+      ocr_content: null as string | null,
       is_processed: false
     }
 
-    // 2. Process with AI (Using the strict bounty tagging rules)
+    // 2. Process with AI using strict bounty tagging rules
     try {
       const aiResponse = await openai.chat.completions.create({
         model: 'gpt-4o-mini',
         messages: [
           {
             role: 'system',
-            content: `You are a strict customer feedback analyzer. Analyze the text. Respond ONLY with valid JSON: { "sentiment": "Positive" | "Neutral" | "Negative", "summary": "1-sentence summary", "tags": ["tag1"] } 
-            STRICT RULES: You MUST ONLY use tags from this exact list: ["UI", "Bug", "Search Bar", "Search Results", "Filter", "Sequences", "Inbox", "Integrations"]. If positive, add "Positive Feedback". If negative, add "Negative Feedback".`
+            content: `You are a strict customer feedback analyzer. Analyze the text. Respond ONLY with valid JSON.
+            STRICT RULES: Use ONLY tags from this list: ["UI", "Bug", "Search Bar", "Search Results", "Filter", "Sequences", "Inbox", "Integrations"]. 
+            If positive, add "Positive Feedback". If negative, add "Negative Feedback".`
           },
           { role: 'user', content }
         ],
         response_format: { type: 'json_object' }
       })
 
-      const parsedResponse = JSON.parse(aiResponse.choices[0].message.content || '{}')
-      let finalTags: string[] = parsedResponse.tags || []
+      // REQUIREMENT: Use Zod and .parse for structured outputs
+      const rawJson = JSON.parse(aiResponse.choices[0].message.content || '{}')
+      const validatedData = FeedbackAnalysisSchema.parse(rawJson)
       
-      // Requirement A01.3: Unassigned tag
-      if (customerEmail === 'Unassigned') finalTags.push('Needs Assignment')
-
       aiData = {
-        sentiment: parsedResponse.sentiment || 'Neutral',
-        summary: parsedResponse.summary || 'No summary generated.',
-        tags: finalTags,
-        ocr_content: null,
+        sentiment: validatedData.sentiment,
+        summary: validatedData.summary,
+        tags: validatedData.tags,
+        ocr_content: validatedData.ocr_content || null,
         is_processed: true
       }
-    } catch (error) {
-      console.log("AI processing skipped (likely quota limit)")
-      if (customerEmail === 'Unassigned') aiData.tags.push('Needs Assignment')
+    } catch (aiError) {
+      console.warn("AI processing skipped or failed validation:", aiError)
     }
 
-    // 3. Insert into database
+    // REQUIREMENT A01.3: Apply "Needs Assignment" if email is missing
+    if (customerEmail === 'Unassigned' && !aiData.tags.includes('Needs Assignment')) {
+      aiData.tags.push('Needs Assignment')
+    }
+
+    // 3. Insert into database using the standard client
+    // Ensure your Supabase RLS allows "Anon" to perform Inserts on the feedback table
     const { error } = await supabase.from('feedback').insert({
       customer_email: customerEmail,
       source: 'email',
-      rating: 3, // Default rating for emails since they don't have stars
+      rating: 3, // Default rating for email channel
       content: content,
       ...aiData
     })
 
     if (error) {
-      console.error('Insert error:', error)
+      console.error('Database Insert error:', error)
       throw error
     }
 
     return NextResponse.json({ success: true, message: 'Email ingested successfully' })
 
   } catch (error) {
-    console.error('Webhook Error:', error)
-    return NextResponse.json({ error: 'Failed to process email' }, { status: 500 })
+    console.error('Webhook Runtime Error:', error)
+    return NextResponse.json(
+      { error: 'Failed to process inbound feedback' }, 
+      { status: 500 }
+    )
   }
 }

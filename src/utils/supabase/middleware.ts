@@ -16,7 +16,7 @@ export async function updateSession(request: NextRequest) {
           return request.cookies.getAll()
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
+          cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value, options))
           supabaseResponse = NextResponse.next({
             request,
           })
@@ -28,26 +28,30 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  // Retrieve the user from the current session
+  const { data: { user } } = await supabase.auth.getUser()
 
-  const isPublicRoute = request.nextUrl.pathname.startsWith('/login')
+  // REQUIREMENT A02: Domain restriction
+  const isVamoUser = user?.email?.endsWith('@vamo.app')
+  const isLoginPage = request.nextUrl.pathname.startsWith('/login')
+  const isAuthPage = request.nextUrl.pathname.startsWith('/auth')
 
-  // Not logged in -> go to login
-  if (!user && !isPublicRoute) {
+  // 1. If no user is logged in, redirect to login (unless already on login/auth pages)
+  if (!user && !isLoginPage && !isAuthPage) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
 
-  // Logged in but wrong domain -> back to login
-  if (user && !user.email?.endsWith('@vamo.app') && !isPublicRoute) {
+  // 2. If a user is logged in but NOT from @vamo.app, sign them out and redirect to login
+  if (user && !isVamoUser && !isLoginPage) {
+    await supabase.auth.signOut()
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     url.searchParams.set('error', 'unauthorized_domain')
     return NextResponse.redirect(url)
   }
 
+  // IMPORTANT: Return the supabaseResponse object to keep cookies in sync
   return supabaseResponse
 }

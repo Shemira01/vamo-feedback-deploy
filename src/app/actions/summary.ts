@@ -2,9 +2,17 @@
 'use server'
 
 import OpenAI from 'openai'
+import { z } from 'zod'
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
+})
+
+// REQUIREMENT: Use Zod for structured outputs
+const AggregateReportSchema = z.object({
+  headline_summary: z.string(),
+  key_themes: z.array(z.string()),
+  recommended_actions: z.array(z.string()),
 })
 
 export async function generateAggregateSummary(feedbacks: any[]) {
@@ -12,9 +20,8 @@ export async function generateAggregateSummary(feedbacks: any[]) {
     return "No data to summarize."
   }
 
-  // Strip down the data to save tokens and only pass what the AI needs
+  // Simplify data for the prompt to save tokens
   const simplifiedData = feedbacks.map(f => ({
-    source: f.source,
     rating: f.rating,
     tags: f.tags,
     content: f.content
@@ -26,26 +33,37 @@ export async function generateAggregateSummary(feedbacks: any[]) {
       messages: [
         {
           role: 'system',
-          content: `You are a brilliant Product Manager analyzing a batch of customer feedback. 
-          
-          YOUR GOAL: Provide a macro-summary of the provided feedback.
-          
-          RULES:
-          1. Do not just list the feedback. Find the common themes.
-          2. Give MORE WEIGHT to issues or sentiments that are mentioned multiple times (e.g., "3 users complained about...").
-          3. Keep it actionable and concise.
-          4. Use plain text formatting with dashes (-) for bullet points. Do not use complex markdown.`
+          content: `You are a Product Manager. Analyze the feedback batch. 
+          Respond ONLY with a JSON object containing:
+          - headline_summary: A 2-sentence overview.
+          - key_themes: Array of the top 3 recurring themes.
+          - recommended_actions: Array of 2 actionable steps.`
         },
         {
           role: 'user',
           content: JSON.stringify(simplifiedData)
         }
-      ]
+      ],
+      response_format: { type: 'json_object' }
     })
 
-    return aiResponse.choices[0].message.content
+    // REQUIREMENT: Use Zod and .parse
+    const rawJson = JSON.parse(aiResponse.choices[0].message.content || '{}')
+    const validatedReport = AggregateReportSchema.parse(rawJson)
+
+    // Return a clean string for the UI
+    return `
+**Summary:** ${validatedReport.headline_summary}
+
+**Top Themes:**
+${validatedReport.key_themes.map(t => `- ${t}`).join('\n')}
+
+**Recommendations:**
+${validatedReport.recommended_actions.map(a => `- ${a}`).join('\n')}
+    `.trim()
+
   } catch (error) {
     console.error("AI Summary generation failed:", error)
-    return "The AI is currently unavailable (Check your OpenAI API quota). But when it is online, your report will appear right here!"
+    return "The AI is currently unavailable. Please check your API quota."
   }
 }
