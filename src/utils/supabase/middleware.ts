@@ -17,14 +17,14 @@ export async function updateSession(request: NextRequest) {
         },
         setAll(cookiesToSet) {
           // FIX: Pass only name and value to the request cookies.
-          // The 'options' object is not compatible with request headers.
+          // The 'options' object is not compatible with request headers in Next.js 16.
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
           
           supabaseResponse = NextResponse.next({
             request,
           })
           
-          // Pass all attributes (including options) to the response cookies.
+          // Attributes like 'path' and 'maxAge' ARE allowed for the outgoing response.
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
           )
@@ -33,22 +33,17 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { user } } = await supabase.auth.getUser()
 
   const isPublicRoute = request.nextUrl.pathname.startsWith('/login')
 
   // Requirement A02: Domain restriction and authentication protection
-  // 1. Not logged in -> go to login
   if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
 
-  // 2. Logged in but wrong domain -> back to login
-  // Ensure only users with authorized emails can access the hub
   if (user && !user.email?.endsWith('@vamo.app') && !isPublicRoute) {
     await supabase.auth.signOut()
     const url = request.nextUrl.clone()
