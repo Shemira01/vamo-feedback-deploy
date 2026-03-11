@@ -1,41 +1,31 @@
-<<<<<<< HEAD
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🚀 Vamo Feedback Hub
 
-## Getting Started
+A high-performance Customer Feedback Dashboard built for Vamo. This application centralizes feedback from emails, manual logs, and mobile screenshots, using AI to categorize, summarize, and generate macro-reports.
 
-First, run the development server:
+## ✨ Core Features
 
+* **🔐 Domain-Locked Auth:** Secured with Supabase Auth, strictly limited to `@vamo.app` email domains.
+* **📥 Multi-Channel Ingestion:** * **Email Webhook:** Custom API endpoint (`/api/inbound`) that parses customer emails from subject lines.
+    * **Manual Entry:** Quick-log form for direct feedback.
+    * **Image Uploads:** Support for screenshots with integrated OCR text extraction.
+* **🧠 AI-Powered Intelligence:** * **Automated Tagging:** GPT-4o-mini categorizes feedback into specific categories (UI, Bug, Sequences, etc.).
+    * **Sentiment Analysis:** Instant "Positive/Negative/Neutral" labeling.
+    * **Macro Summarization:** One-click AI reports that analyze the current filtered view to find trends.
+* **🔍 Advanced Filtering:** Dynamic URL-driven filters for customer email, specific tags, and custom date ranges.
+* **✏️ Inline Management:** Real-time editing of tags and customer assignments for "Unassigned" feedback.
+
+## 🛠️ Tech Stack
+
+* **Framework:** Next.js 15 (App Router)
+* **Database & Auth:** Supabase
+* **AI Engine:** OpenAI (GPT-4o-mini)
+* **Styling:** Tailwind CSS + Shadcn UI
+* **Deployment:** Vercel
+
+## 🚀 Getting Started
+
+### 1. Clone & Install
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-=======
-# bounty-097215a3
-Bounty repository for Build Customer Feedback Dashboard with Supabase
->>>>>>> 7f20df016777c59cd297d874c8c3eed8340ab976
+git clone <your-repo-url>
+cd dashboard
+pnpm install
