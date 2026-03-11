@@ -16,14 +16,15 @@ export async function updateSession(request: NextRequest) {
           return request.cookies.getAll()
         },
         setAll(cookiesToSet) {
-          // FIX: request.cookies.set only accepts (name, value) in Next.js 16
+          // FIX: Pass only name and value to the request cookies.
+          // The 'options' object is not compatible with request headers.
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
           
           supabaseResponse = NextResponse.next({
             request,
           })
           
-          // Options (like path, maxAge) ARE allowed here for the outgoing response
+          // Pass all attributes (including options) to the response cookies.
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
           )
@@ -32,23 +33,23 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  // Retrieve the user from the session
-  const { data: { user } } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
-  // REQUIREMENT A02: Domain restriction logic
-  const isVamoUser = user?.email?.endsWith('@vamo.app')
-  const isLoginPage = request.nextUrl.pathname.startsWith('/login')
-  const isAuthPage = request.nextUrl.pathname.startsWith('/auth')
+  const isPublicRoute = request.nextUrl.pathname.startsWith('/login')
 
-  // Redirect to login if not authenticated
-  if (!user && !isLoginPage && !isAuthPage) {
+  // Requirement A02: Domain restriction and authentication protection
+  // 1. Not logged in -> go to login
+  if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
 
-  // Force logout if not using a @vamo.app domain
-  if (user && !isVamoUser && !isLoginPage) {
+  // 2. Logged in but wrong domain -> back to login
+  // Ensure only users with authorized emails can access the hub
+  if (user && !user.email?.endsWith('@vamo.app') && !isPublicRoute) {
     await supabase.auth.signOut()
     const url = request.nextUrl.clone()
     url.pathname = '/login'
